@@ -6,39 +6,38 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error
 from sigmoid import *
 
-
-features = np.array([0,1,2,3])
-#    0. sepal length in cm
-#    1. sepal width in cm
-#    2. petal length in cm
-#    3. petal width in cm
-
+##------------- Loading data -----------------##
 class1 = []
 with open("class_1") as f:
     for line in f:
         class1.append([float(line[0:3]), float(line[4:7]), float(line[8:11]), float(line[12:15])])
     class1 = np.array(class1)
-#print(class1)
 
 class2 = []
 with open("class_2") as f:
     for line in f:
         class2.append([float(line[0:3]), float(line[4:7]), float(line[8:11]), float(line[12:15])])
     class2 = np.array(class2)
-#print(class2)
 
 class3 = []
 with open("class_3") as f:
     for line in f:
         class3.append([float(line[0:3]), float(line[4:7]), float(line[8:11]), float(line[12:15])])
     class3 = np.array(class3)
-#print(class3)
+##--------------------------------------------##
 
-trainStart = 0
-trainEnd = 30
+##---------- Initializing variables ----------##
+features = np.array([0,1,2,3])
+#    0. sepal length in cm
+#    1. sepal width in cm
+#    2. petal length in cm
+#    3. petal width in cm
+
+trainStart = 20
+trainEnd = 50
 trainSize = 30
-testStart = 30
-testEnd = 50
+testStart = 0
+testEnd = 20
 testSize = 20
 
 C = 3                       # Number of classes
@@ -58,51 +57,52 @@ testSet1 = class1[testStart:testEnd, features]
 testSet2 = class2[testStart:testEnd, features]
 testSet3 = class3[testStart:testEnd, features]
 testSet = np.concatenate((testSet1,testSet2,testSet3),axis=0)
-testSet = np.reshape(testSet,[(testSize)*C,D])
+testSet = np.reshape(testSet,[testSize*C,D])
 
 # Creating targets for each class
-target1 = np.tile([1,0,0],trainEnd)
-target2 = np.tile([0,1,0],trainEnd)
-target3 = np.tile([0,0,1],trainEnd)
+target1 = np.tile([1,0,0],trainSize)
+target2 = np.tile([0,1,0],trainSize)
+target3 = np.tile([0,0,1],trainSize)
 target = np.concatenate((target1,target2,target3),axis=None)
-target = np.reshape(target,[trainEnd*C,C])
+target = np.reshape(target,[trainSize*C,C])
 
 Wx = np.zeros((C,D))        # The weighting matrix
-wo = np.zeros((C,1))        # The bias vector
+wo = np.zeros((C,1))        # The offset vector
 W = np.concatenate((Wx, wo), axis = 1)
 N = len(trainSet1)           # Size of the training set -30-
 M = len(testSet1)            # Size of the test set -20-
 
-# Confidence vector for each observation
-def forwardPred(x, W, N, C):
+##--------------------------------------------##
+
+##---------- The linear classifier -----------##
+def linClassifier(x, W, N, C):
     g = np.zeros([N*C, C])
     for k, xk in enumerate(x):
         xk = np.append([xk], [1])
-        xk = xk.reshape(D+1, 1)
+        xk = xk.reshape(len(x[0])+1, 1)
         zk = W@xk
         g[k] = sigmoid(zk.T[0])
     return g
 
 ##---------- Training the linear classifier ----------##
-def linearClassifier(alpha, iter, N, D, W, C, trainSet, target):
+def trainLinClassifier(alpha, iter, N, D, W, C, trainSet, target):
     loss = np.zeros([iter,1],dtype=float)
     for m in range(iter):
         print(f"Training iteration: {m}")
-        gradMSE = np.zeros((C,D+1))
-        g = forwardPred(trainSet, W, N, C)
-        for (xk, gk, tk) in zip(trainSet, g, target): # xk: , tk: class label
+        gradMSE = np.zeros((C,len(trainSet[0])+1))
+        g = linClassifier(trainSet, W, N, C)
+        for (xk, gk, tk) in zip(trainSet, g, target): # xk: instance , tk: class label
             xk = np.append([xk], [1])
-            xk = xk.reshape(D+1, 1)
+            xk = xk.reshape(len(trainSet[0])+1, 1)
             gradMSE += (((gk-tk)*gk).reshape(C,1) * (np.ones((C,1))-gk.reshape(C,1))) @ xk.T
         W = W - alpha*gradMSE
         loss[m] = mean_squared_error(g,target)
     return W, loss
 
-def confusionMatrix(N, C, trainSet, W):
-    print(N)
+##---------- Confusion matrix and error rate ----------##
+def confusionMatrix(N, C, data, W):
     confusionMatrix = np.zeros((C,C))
-    g = forwardPred(trainSet, W, N, C)
-    print(g)
+    g = linClassifier(data, W, N, C)
     trueLabel = -1
     for k, gk in enumerate(g):
         if k % N == 0:
@@ -120,18 +120,50 @@ def errorRate(confusionMatrix):
                 errors += confusionMatrix[trueLabel][predLabel]
             numSamples += confusionMatrix[trueLabel][predLabel]
     return errors/numSamples
+##--------------------------------------------##
 
-# def removeFeature(trainSet, testSet, alpha, iter, N, D, W, C, target, feature):
-#     W = np.zeros([C, D+1],dtype=float)
-#     trainSet = np.delete(trainSet, 1, 1)
-#     testSet = np.delete(testSet, 1, 1)
-#     W,_ = linearClassifier(alpha, iter, N, D, W, C, trainSet, target)
+##---------- Removing features ----------##
+def removeFeatures(trainSet, testSet, alpha, iter, N, D, C, target, numfeatures):
+    if numfeatures == 1:
+        # Remove sepal width
+        W = np.zeros([C, D],dtype=float)
+        trainSet = np.delete(trainSet, 1, 1)
+        testSet = np.delete(testSet, 1, 1)
+    if numfeatures == 2:
+        # Remove sepal width and length
+        W = np.zeros([C, D],dtype=float)
+        trainSet = np.delete(trainSet, 1, 1)
+        testSet = np.delete(testSet, 1, 1)
+        W = np.zeros([C, D-1],dtype=float)
+        trainSet = np.delete(trainSet, 0, 1)
+        testSet = np.delete(testSet, 0, 1)    
+    if numfeatures == 3:
+        # Remove sepal width, length and petal length
+        W = np.zeros([C, D],dtype=float)
+        trainSet = np.delete(trainSet, 1, 1)
+        testSet = np.delete(testSet, 1, 1)
+        W = np.zeros([C, D-1],dtype=float)
+        trainSet = np.delete(trainSet, 0, 1)
+        testSet = np.delete(testSet, 0, 1)
+        W = np.zeros([C, D-2],dtype=float)
+        trainSet = np.delete(trainSet, 0, 1)
+        testSet = np.delete(testSet, 0, 1) 
+           
+    W,_ = trainLinClassifier(alpha, iter, N, D, W, C, trainSet, target)
+    c_train = confusionMatrix(N, C, trainSet, W)
+    print(errorRate(c_train))
+    #plotConfusionMatrix('Training set', c_train)
+    c_test = confusionMatrix(M, C, testSet, W)
+    print(errorRate(c_test))
+    #plotConfusionMatrix('Test set', c_test)
+##--------------------------------------------##
 
-def plotAlphas():
+##----------------- Plotting -----------------##
+def plotAlphas(iter, N, D, W, C, trainSet, target):
     alphas = [0.05,0.01,0.005,0.001]
     for a in alphas:
         W = np.zeros([C, D+1],dtype=float)
-        W,loss = linearClassifier(a, iter, N, D, W, C, trainSet, target)
+        W,loss = trainLinClassifier(a, iter, N, D, W, C, trainSet, target)
         plt.plot(np.arange(iter),loss,label="alpha= "+str(a))
         plt.legend()
         plt.grid()
@@ -176,17 +208,16 @@ def plotHistograms():
         plt.grid()
         plt.title(featureName(f))
     plt.show()
+##--------------------------------------------##
 
 if __name__ == '__main__':
-    W,_ = linearClassifier(alpha, iter, N, D, W, C, trainSet, target)
-    #print(len(trainSet1))
-    #print(trainSet)
-    #forwardPred(trainSet, W, N, C)
+    W,_ = trainLinClassifier(alpha, iter, N, D, W, C, trainSet, target)
     # c_train = confusionMatrix(N, C, trainSet, W)
     # plotConfusionMatrix('Training set', c_train)
     # c_test = confusionMatrix(M, C, testSet, W)
+    # print(errorRate(c_train))
+    # print(errorRate(c_test))
     # plotConfusionMatrix('Test set', c_test)
-    #plotHistograms()
-    plotAlphas()
-
+    removeFeatures(trainSet, testSet, alpha, iter, N, D, C, target, 3)
+    plotAlphas(iter, N, D, W, C, trainSet, target)
         
